@@ -1,0 +1,350 @@
+---
+title: "Opportunity driven migration"
+subtitle: "Leveraging Census of the Population data to understand internal migration movements"
+bibliography: references.bib
+format: html
+---
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(highcharter)
+
+source('functions/setup_gdp.R')
+source('functions/setup_census.R')
+
+```
+
+Recently, I published an article, that can be accessed [here](https://paeselhz.github.io/posts/immigrant-characteristics-canada/), where I discussed a few changes in the characteristics of the immigrant population in Canada, by analyzing the differences regarding age, income, and education throughout the years for people born outside of Canada, and their following generations. Mostly, we can assume that international migration movements are more directed to larger centers, like the Greater Toronto Area, Montreal, Vancouver, and so on, where job opportunities might be more abundant, but do this phenomenon also happens to drive internal migrations?
+
+This analysis aims to shed some light on the evolution of migration patterns within Canada, by following a couple of trends in the provinces' economies, the income differences by province, and finally the internal migration movements.
+
+## Methodology {.sec-methodology}
+
+For the purpose of this analysis, I kept only data for the inhabitants with 19 years of age and more, since migrations before that age might not be a result of a decision from the child, instead being a decision that comes from the parents or relatives. Also, I have analyzed only data for the Census years of [-@canada-census-2001], [-@canada-census-2006], [-@canada-census-2011] and [-@canada-census-2016].
+
+The metric to establish the binary feature that will classify a person as having migrated within Canada or not is defined by comparing the province where each inhabitant lived five years prior to the Census Year, and the province where the inhabitant lives as the date of the Census. This can be expressed as @eq-condition-migration, using $t$ as the current Census year, and $t-5$ being five years before the current Census year.
+
+$$
+MigrationStatus_{t} = \begin{cases}
+1, & \text{if }Province_{t} \text{ is different to }Province_{t-5} \\
+0, & \text{if }Province_{t} \text{ is equal to }Province_{t-5}. \\
+\end{cases}
+$$ {#eq-condition-migration}
+
+This, by no means, is a completely accurate metric to capture the multitude of migrations that might happen in a person's life, nor does it explains all of the migrations that might happen between two consecutive Census years, however, by using the Census of the Population, we can leverage other information about the profile of who decides to migrate within the country.
+
+## Expectations of wealth growth
+
+Given that Canada is the second largest country in area, it is safe to assume that the distribution of the population and businesses in its provinces is not equal; the harsh weather, difficulties of transportation, and even historical decisions might help explain how different provinces have such different economical profiles, to explain this, however, is not the objective of this analysis, but it might help us understand why some people are willing to migrate in the quest for better opportunities by moving to more prominent provinces.
+
+One of the key metrics that we can use to measure how thriving is a province, is by analyzing the evolution of the GDP (Gross Domestic Product) of each province. For this exercise, we use data for the GDP by provinces (@canada-gdp-provinces) to gather the information needed to measure each province’s GDP, in 2012 current prices.
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+#| label: fig-gdp-provinces
+#| fig-cap: "Evolution of GDP by province"
+cad_gdp_by_province %>% 
+  hchart(
+    type = "line",
+    hcaes(x = ref_date, y = gdp, group = geo)
+  ) %>% 
+  hc_yAxis(
+    title = "GDP in 2012 constant prices"
+  ) %>% 
+  hc_xAxis(
+    title = "Reference Year"
+  ) %>% 
+  hc_legend(
+    vertical_align = "bottom"
+  ) %>% 
+  hc_title(
+    text = "GDP by provinces from 1981 to 2021",
+    margin = 20,
+    align = "left"
+  ) %>% 
+  hc_subtitle(
+    text = "GDP values in 2012 constant prices",
+    align = "left"
+  ) %>% 
+  hc_caption(
+    text = "Data Source: Statistics Canada"
+  ) %>% 
+  hc_exporting(enabled = TRUE)
+```
+
+We can see from @fig-gdp-provinces that the order of highest to lowest contribution to the Canadian GDP by province is stable throughout the years, with no provinces gaining or losing positions to their contribution from 1981 to 2021.
+
+Nonetheless, the GDP does not tell the whole story, since this wealth might not be better distributed among the inhabitants of a given province, this is why we can also analyze the GDP *per capita* to see if the provinces that receive the most internal migrants also have a better GDP per capita. To gather the number of people that lives in a given province, I have used data from the @canada-pop-province to get the number of people that live in each province.
+
+> For the following plots, data from Northern Canada was removed because of the uncertainty of data surrounding the population estimates and GDP.
+
+::: panel-tabset
+### GDP per-capita by province
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#| label: fig-gdp-per-capita
+#| fig-cap: "Evolution of GDP per-capita by province"
+cad_gdp_by_province %>% 
+  filter(
+    geo != "Northern Canada"
+  ) %>% 
+  left_join(
+    cad_population_provinces,
+    by = c("ref_date", "geo")
+  ) %>% 
+  mutate(
+    gdp = gdp*1000000,
+    gdp_per_capita = round(gdp/pop, digits = 2)
+  ) %>% 
+  hchart(
+    type = "line",
+    hcaes(x = ref_date, y = gdp_per_capita, group = geo)
+  ) %>%
+  hc_yAxis(
+    title = "GDP per capita in 2012 constant prices"
+  ) %>% 
+  hc_xAxis(
+    title = "Reference Year"
+  ) %>% 
+  hc_legend(
+    vertical_align = "bottom"
+  ) %>% 
+  hc_title(
+    text = "GDP per capita by provinces from 1981 to 2021",
+    margin = 20,
+    align = "left"
+  ) %>% 
+  hc_subtitle(
+    text = "GDP per capita values in 2012 constant prices",
+    align = "left"
+  ) %>% 
+  hc_caption(
+    text = "Data Source: Statistics Canada"
+  ) %>% 
+  hc_exporting(enabled = TRUE)
+```
+
+### GDP per-capita by province (rank)
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#| label: fig-gdp-per-capita-rank
+#| fig-cap: "Ranking of provinces by GDP per-capita through the years"
+cad_gdp_by_province %>% 
+  filter(
+    geo != "Northern Canada"
+  ) %>% 
+  left_join(
+    cad_population_provinces,
+    by = c("ref_date", "geo")
+  ) %>% 
+  mutate(
+    gdp = gdp*1000000,
+    gdp_per_capita = round(gdp/pop, digits = 2)
+  ) %>% 
+  group_by(ref_date) %>% 
+  arrange(ref_date, desc(gdp_per_capita)) %>% 
+  mutate(
+    rank = 1,
+    rank = cumsum(rank)
+  ) %>% 
+  hchart(
+    type = "spline",
+    hcaes(x = ref_date, y = rank, group = geo)
+  ) %>%
+  hc_yAxis(
+    title = "",
+    categories = paste0("Rank ", 0:10),
+    reversed = TRUE,
+    tickInterval = 1,
+    min = 1,
+    max = 10,
+    gridLineWidth = 0
+  ) %>% 
+  hc_xAxis(
+    title = "Reference Year",
+    gridLineWidth = 0
+  ) %>%
+  hc_tooltip(
+    formatter = JS(js_tooltip_rank)
+  ) %>% 
+  hc_legend(
+    vertical_align = "bottom"
+  ) %>%
+  hc_title(
+    text = "Rank of GDP per capita by provinces from 1981 to 2021",
+    margin = 20,
+    align = "left"
+  ) %>% 
+  hc_subtitle(
+    text = "GDP per capita values in 2012 constant prices",
+    align = "left"
+  ) %>% 
+  hc_caption(
+    text = "Data Source: Statistics Canada"
+  ) %>% 
+  hc_exporting(enabled = TRUE)
+```
+:::
+
+Still, when we look at the evolution of the GDP per capita, with current 2012 prices, most of the growth can be accounted for by inflation, however, we do not see many changes in which provinces render a higher GDP per capita throughout time. This is by far a weak assumption that these provinces might be more attractive because GDP per capita is not a good-enough measure to capture the inequality in wages, so further studies would be needed to see if the income by provinces is something that might be more attractive to make people move.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#| label: fig-income-province
+#| fig-cap: "Mean Income evolution by province"
+
+census_data_analysis %>% 
+  filter(
+    totinc >= 1000,
+    totinc < 2000000,
+    agegrp != "15 to 19 years"
+  ) %>% 
+  select(
+    file_year,
+    weight,
+    totinc,
+    pr
+  ) %>% 
+  group_by(file_year, pr) %>% 
+  summarise(
+    wage = round(sum(weight*totinc)/sum(weight), digits = 2)
+  ) %>% 
+  hchart(
+    type = "line",
+    hcaes(x = file_year, y = wage, group = pr)
+  ) %>% 
+  hc_title(
+    text = "Mean income by province"
+  ) %>% 
+  hc_xAxis(
+    title = "Census Year"
+  ) %>% 
+  hc_yAxis(
+    title = "Mean income in Canadian dollars"
+  ) %>% 
+  hc_caption(
+    text = "Data Source: Statistics Canada"
+  ) %>% 
+  hc_exporting(enabled = TRUE)
+```
+
+Analyzing @fig-income-province tells a different story, given that the GDP per capita might be biased by the type of industries that create that revenue in a given province or the sheer amount of people living in a certain region. So when we look at the reported income present in the Census of the Population, we can see that some provinces show a growth of annual income that surpasses inflation, thus being more attractive to professionals looking for jobs.
+
+## What are the migration flows?
+
+### Evolution through the years
+
+By analyzing a flow chart of the migration we can start to see which provinces are attractive to most of the people, and where are this people coming from.
+
+> This plot shows only the **net** migrations between two provinces, by calculating the difference in the number of people that left Province A to Province B and that left Province B to Province A.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#| label: fig-depwheel-migrations
+#| fig-cap: "Migration flows between Canadian provinces according to 2016 Census"
+migrational_data <- 
+  census_data_analysis %>% 
+  filter(
+    agegrp != "15 to 19 years",
+    file_year == 2016
+  ) %>% 
+  group_by(
+    destination = pr,
+    origin = pr5
+  ) %>% 
+  summarise(
+    pop = floor(sum(weight))
+  ) %>% 
+  ungroup() %>% 
+  filter(
+    destination != origin
+  )
+
+migrational_data %>% 
+  left_join(
+    migrational_data,
+    by = c("destination" = "origin",
+           "origin" = "destination"),
+    suffix = c('', "_opposite")
+  ) %>% 
+  mutate(
+    net = pop_opposite - pop,
+    color = case_when(
+      origin == "British Columbia" ~ "#8BB80D", 
+      origin == "Manitoba" ~ "#FA5C89", 
+      origin == "New Brunswick" ~ "#EBD228", 
+      origin == "Newfoundland and Labrador" ~ "#6B7AED",
+      origin == "Northern Canada" ~ "#0D4DB8", 
+      origin == "Nova Scotia" ~ "#FD8151", 
+      origin == "Ontario" ~ "#9B54B7", 
+      origin == "Prince Edward Island" ~ "#4928EB",
+      origin == "Quebec" ~ "#EDC94A", 
+      origin == "Saskatchewan" ~ "#B8810D", 
+      origin == "Alberta" ~ "#B82816",
+      TRUE ~ "#000000"
+    )
+  ) %>% 
+  filter(
+    net > 0
+  ) %>% 
+  select(
+    from = origin,
+    to = destination,
+    weight = net,
+    color
+  ) %>% 
+  hchart(
+    type = "dependencywheel"
+  ) %>% 
+  hc_title(
+    text = "Net migrations between Canadian provinces for 2016"
+  ) %>% 
+  hc_caption(
+    text = "Data Source: Statistics Canada"
+  ) %>% 
+  hc_exporting(enabled = TRUE)
+```
+
+Most of the provinces end up losing people to the largest province, Ontario, except for Quebec, as can be seen in @fig-depwheel-migrations, and this trend is unchanged since the earliest data point available for this analysis. A province such as Ontario poses an opportunity of equal size to the challenge since it has to deal with the province's internal growth of population, the number of immigrants from other countries that arrive, and the number of Canadian immigrants that move to Ontario searching for better opportunities.
+
+### Share of internal migrants by age group
+
+As the migration picture changes, we begin to understand that even though larger cities might be attractive to younger people, that are looking for growth, education, and opportunity, these characteristics might be overwhelming for some people after a certain age, that will look for places where the cost of living might be less demanding.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+#| label: fig-stacked-bar-migrations
+#| fig-cap: "Share of internal migrants by age group"
+int_migrants <-
+  census_data_analysis %>% 
+  filter(
+    file_year == 2016,
+    agegrp != "15 to 19 years"
+  ) %>% 
+  mutate(
+    migration = ifelse(pr == pr5, "Non-Migrant", "Migrant")
+  ) %>% 
+  group_by(
+    migration, agegrp
+  ) %>% 
+  summarise(
+    pop = floor(sum(weight))
+  ) %>% 
+  ungroup()
+
+int_migrants %>% 
+  hchart(
+    "bar",
+    hcaes(x = agegrp, y = pop, group = migration),
+    stacking = "normal"
+  ) %>% 
+  hc_xAxis(
+    reversed = FALSE,
+    title = "Age Group"
+  ) %>% 
+  hc_yAxis(
+    title = "Population"
+  )
+```
+
+Nonetheless, the findings from @fig-stacked-bar-migrations, demonstrate that the share of the population that is willing to migrate is greater for the age groups between 20 and 39 years, indicating motives that might be related to education and job opportunities in different provinces, and after a certain age, people tend to stay in the province that they have established.
+
+## Final Remarks
+
+Many different impulses might be triggers to motivate a person or a family to migrate from one province to another, but it is safe to assume that job prosperity and opportunity are strong motivations to make people migrate from one province to another. There are still a couple of questions related to the job market in different provinces, that need to be addressed by further investigation. However, the focus of this analysis was to enlighten the discussion surrounding internal migrations in Canada and the opportunities and challenges created by that.
